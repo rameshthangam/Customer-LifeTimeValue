@@ -26,7 +26,7 @@ class customer_info(object):
         # Append the site visit
         if event['type'] == 'SITE_VISIT':
             self.num_visits += 1
-        # Append the expenditures
+        # Append the money spend by each customers
         elif event['type'] == 'ORDER':
             if event['verb'] == 'NEW':
                 # self.orders[event['key']] = event['total_amount']
@@ -59,16 +59,18 @@ class time_frame(object):
         event_time = event['event_time']
         event_date = self.parse_event_time(event_time)
 
-        # Update the earlist time
+        # Update the earliest time
         self.start_time = self.get_start_time(event_date)
         # Update the latest time
         self.end_time = self.get_end_time(event_date)
 
-    # Parse the time field
-    # %Y-%m-%d
+    # Parse the time field and fetch only the date and time
+    # Customer visit duration will be only for minutes and hours, not in days
+    # Split the floating point value
+
     def parse_event_time(self, event_time):
-        # Only need the year-month-date part
-        return event_time.split('T')[0]
+        # Only need the year-month-date, hours, min and secs
+        return event_time.split('.')[0]
 
     # Select the earlist event time
     def get_start_time(self, event_date):
@@ -76,8 +78,12 @@ class time_frame(object):
         if not self.start_time:
             return event_date
 
-        date0 = datetime.strptime(self.start_time, '%Y-%m-%d')
-        date1 = datetime.strptime(event_date, '%Y-%m-%d')
+        print('start time :', self.start_time)
+
+        # Split the date and time (in mins and secs)
+
+        date0 = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S')
+        date1 = datetime.strptime(event_date, '%Y-%m-%dT%H:%M:%S')
 
         if date0 <= date1:
             return self.start_time
@@ -90,8 +96,8 @@ class time_frame(object):
         if not self.end_time:
             return event_date
 
-        date0 = datetime.strptime(self.end_time, '%Y-%m-%d')
-        date1 = datetime.strptime(event_date, '%Y-%m-%d')
+        date0 = datetime.strptime(self.end_time, '%Y-%m-%dT%H:%M:%S')
+        date1 = datetime.strptime(event_date, '%Y-%m-%dT%H:%M:%S')
 
         if date0 <= date1:
             return event_date
@@ -127,8 +133,18 @@ def top_x_simple_ltv_customers(x, D):
     customer_map, tf = D
     # LTV = 52(a) X t
     # a: customer expenditures per visit (USD) x number of site visits per week
-    time_delta = datetime.strptime(tf.end_time, '%Y-%m-%d') - datetime.strptime(tf.start_time, '%Y-%m-%d')
+
+    print('End time :',tf.end_time)
+    print('Start time :', tf.start_time)
+
+    time_delta = datetime.strptime(tf.end_time, '%Y-%m-%dT%H:%M:%S') - \
+                 datetime.strptime(tf.start_time, '%Y-%m-%dT%H:%M:%S')
+
+    print('time_delta: ',time_delta)
+
     week_delta = time_delta.days / 7
+
+    print('week_delta :', week_delta)
     customer_list = list(customer_map.values())
     # Use a heap to store all the ltv
     customer_ltv_heap = []
@@ -138,11 +154,15 @@ def top_x_simple_ltv_customers(x, D):
         order_list = list(customer.orders.values())
         customer_exp = sum(order_list)
         # Get # visists
+
         num_visit = customer.num_visits
+
         # Get customer expenditures per visit (USD)
         customer_exp_per_visit = customer_exp / num_visit
         # Get number of site visits per week
+
         num_visit_per_week = num_visit / week_delta
+
         # Get LTV
         a = customer_exp_per_visit * num_visit_per_week
         t = 10
@@ -170,7 +190,7 @@ def argument_parse():
 
 
 def event_iteration(events_file, customer_map, tf):
-    with open(os.getcwd() + '/' + events_file) as input_file:
+    with open('/Users/rthan6/PycharmProjects/CustLtv' + '/' + events_file) as input_file:
         # Load the k-v pairs in input file as json objects
         events = json.load(input_file)
         for event in events:
@@ -180,7 +200,7 @@ def event_iteration(events_file, customer_map, tf):
 
 
 def main():
-    # Get the parsed arguments	
+    # Get the parsed arguments
     args = argument_parse()
 
     # Create a hashmap to direct customer_id to customer_info object
@@ -193,7 +213,9 @@ def main():
     # Iterate each incoming event
     customer_map, tf = event_iteration(events_file, customer_map, tf)
 
-  
+    # print(len(customer_map))
+    # print(tf.start_time)
+    # print(tf.end_time)
 
     top_X_simple_ltv_customers = top_x_simple_ltv_customers(int(args.x), [customer_map, tf])
     # print(top_X_simple_ltv_customers)
